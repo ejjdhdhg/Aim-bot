@@ -1,0 +1,100 @@
+local _G = getgenv()
+_G.RaioCirculo = 80
+_G.DistanciaMaxima = 100
+
+-- Serviços
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Controles Mobile
+local aimbotAtivo = false
+local fovVisivel = false
+
+-- Criação do FOV
+local Circulo = Drawing.new("Circle")
+Circulo.Visible = fovVisivel
+Circulo.Color = Color3.new(0.3, 0, 0.3)
+Circulo.Thickness = 1
+Circulo.Radius = _G.RaioCirculo
+Circulo.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+-- Interface Mobile
+local mobileGui = Instance.new("ScreenGui")
+mobileGui.Name = "MobileAimbotUI"
+mobileGui.ResetOnSpawn = false
+mobileGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+mobileGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Botão de Toggle Principal (Direita)
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "BtnToggle"
+toggleButton.Size = UDim2.new(0, 100, 0, 100)
+toggleButton.Position = UDim2.new(1, -120, 1, -120) -- Canto inferior direito
+toggleButton.AnchorPoint = Vector2.new(1, 1)
+toggleButton.Text = "🔫"
+toggleButton.TextSize = 40
+toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleButton.BackgroundTransparency = 0.5
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.BorderSizePixel = 0
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 0)
+corner.Parent = toggleButton
+toggleButton.Parent = mobileGui
+
+-- Botão do FOV (Esquerda)
+local fovButton = Instance.new("TextButton")
+fovButton.Name = "BtnFOV"
+fovButton.Size = UDim2.new(0, 80, 0, 80)
+fovButton.Position = UDim2.new(0, 20, 1, -100) -- Canto inferior esquerdo
+fovButton.AnchorPoint = Vector2.new(0, 1)
+fovButton.Text = "🎯"
+fovButton.TextSize = 30
+fovButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+fovButton.BackgroundTransparency = 0.5
+fovButton.TextColor3 = Color3.new(1, 1, 1)
+fovButton.Font = Enum.Font.SourceSansBold
+fovButton.BorderSizePixel = 0
+local corner2 = corner:Clone()
+corner2.Parent = fovButton
+fovButton.Parent = mobileGui
+
+-- Funções Touch
+local function alternarAimbot()
+    aimbotAtivo = not aimbotAtivo
+    toggleButton.Text = aimbotAtivo and "🟢" or "🔴"
+    toggleButton.BackgroundColor3 = aimbotAtivo and Color3.fromRGB(0, 80, 0) or Color3.fromRGB(80, 0, 0)
+end
+
+local function alternarFOV()
+    fovVisivel = not fovVisivel
+    Circulo.Visible = fovVisivel
+    fovButton.Text = fovVisivel and "👁️" or "🎯"
+end
+
+-- Eventos
+toggleButton.TouchTap:Connect(alternarAimbot)
+fovButton.TouchTap:Connect(alternarFOV)
+
+-- Sistema de Raycast (mesmo do código anterior)
+local function verificarParede(alvo)
+    local origem = Camera.CFrame.Position
+    local destino = alvo.Character.Head.Position
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    local resultado = workspace:Raycast(origem, destino - origem, params)
+    return not resultado or resultado.Instance:IsDescendantOf(alvo.Character)
+end
+
+-- Loop de Aiming (mesma lógica anterior)
+RunService.RenderStepped:Connect(function()
+    if not aimbotAtivo then return end
+
+    -- ... (inserir aqui o sistema de seleção de alvos do código anterior)
+end)
