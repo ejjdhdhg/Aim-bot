@@ -1,0 +1,184 @@
+local _G = getgenv()
+_G.RaioCirculo = 80
+_G.DistanciaMaxima = 100
+_G.Suavizacao = 0.3
+
+-- Serviços
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Estados
+local aimbotAtivo = false
+local fovVisivel = false
+local UltimoAlvo = nil
+local Cooldown = 0
+
+-- Elementos gráficos
+local Circulo = Drawing.new("Circle")
+Circulo.Visible = false
+Circulo.Color = Color3.new(0.3, 0, 0.3)
+Circulo.Thickness = 1
+Circulo.Radius = _G.RaioCirculo
+Circulo.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+-- Interface Mobile
+local mobileGui = Instance.new("ScreenGui")
+mobileGui.Name = "MobileControls"
+mobileGui.ResetOnSpawn = false
+mobileGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+mobileGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Botão Toggle (Direita)
+local btnToggle = Instance.new("TextButton")
+btnToggle.Name = "MainButton"
+btnToggle.Size = UDim2.new(0, 100, 0, 100)
+btnToggle.Position = UDim2.new(1, -110, 1, -110)
+btnToggle.AnchorPoint = Vector2.new(1, 1)
+btnToggle.Text = "🔴"
+btnToggle.TextSize = 40
+btnToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+btnToggle.BackgroundTransparency = 0.4
+btnToggle.TextColor3 = Color3.new(1, 1, 1)
+btnToggle.Font = Enum.Font.SourceSansBold
+btnToggle.BorderSizePixel = 0
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 0)
+corner.Parent = btnToggle
+
+-- Botão FOV (Esquerda)
+local btnFOV = Instance.new("TextButton")
+btnFOV.Name = "FOVToggle"
+btnFOV.Size = UDim2.new(0, 80, 0, 80)
+btnFOV.Position = UDim2.new(0, 20, 1, -100)
+btnFOV.AnchorPoint = Vector2.new(0, 1)
+btnFOV.Text = "🎯"
+btnFOV.TextSize = 30
+btnFOV.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+btnFOV.BackgroundTransparency = 0.4
+btnFOV.Font = Enum.Font.SourceSansBold
+btnFOV.BorderSizePixel = 0
+btnFOV.Parent = mobileGui
+corner:Clone().Parent = btnFOV
+
+-- Organização
+btnToggle.Parent = mobileGui
+
+-- Funções de Controle
+local function AlternarAimbot()
+    aimbotAtivo = not aimbotAtivo
+    btnToggle.Text = aimbotAtivo and "🟢" or "🔴"
+    btnToggle.BackgroundColor3 = aimbotAtivo and Color3.fromRGB(0, 70, 0) or Color3.fromRGB(70, 0, 0)
+end
+
+local function AlternarFOV()
+    fovVisivel = not fovVisivel
+    Circulo.Visible = fovVisivel
+    btnFOV.Text = fovVisivel and "👁️" or "🎯"
+end
+
+-- Eventos Touch
+btnToggle.TouchTap:Connect(AlternarAimbot)
+btnFOV.TouchTap:Connect(AlternarFOV)
+
+-- Sistema de Verificação
+local function VerificarVisao(jogador)
+    if not jogador.Character then return false end
+    
+    local cabeca = jogador.Character:FindFirstChild("Head")
+    local rootPart = jogador.Character:FindFirstChild("HumanoidRootPart")
+    local humanoide = jogador.Character:FindFirstChild("Humanoid")
+    
+    if not cabeca or not rootPart or not humanoide or humanoide.Health <= 0 then
+        return false
+    end
+    
+    local posTela = Camera:WorldToViewportPoint(cabeca.Position)
+    if posTela.Z <= 0 then return false end
+    
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    local resultado = workspace:Raycast(
+        Camera.CFrame.Position,
+        cabeca.Position - Camera.CFrame.Position,
+        params
+    )
+    
+    return not resultado or resultado.Instance:IsDescendantOf(jogador.Character)
+end
+
+-- Seleção de Alvo
+local function EncontrarAlvo()
+    local melhorAlvo, menorDistancia = nil, _G.DistanciaMaxima
+    
+    for _, jogador in ipairs(Players:GetPlayers()) do
+        if jogador == LocalPlayer then continue end
+        
+        if VerificarVisao(jogador) then
+            local distancia = (LocalPlayer.Character.HumanoidRootPart.Position - 
+                             jogador.Character.HumanoidRootPart.Position).Magnitude
+            
+            if distancia < menorDistancia then
+                local pos2D = Vector2.new(
+                    Camera:WorldToViewportPoint(jogador.Character.Head.Position).X,
+                    Camera:WorldToViewportPoint(jogador.Character.Head.Position).Y
+                )
+                
+                if (pos2D - Circulo.Position).Magnitude <= Circulo.Radius then
+                    melhorAlvo = jogador.Character.Head
+                    menorDistancia = distancia
+                end
+            end
+        end
+    end
+    
+    return melhorAlvo
+end
+
+-- Aim Suave Mobile
+local function MirarSuave(alvo)
+    local currentCF = Camera.CFrame
+    local targetCF = CFrame.new(currentCF.Position, alvo.Position)
+    Camera.CFrame = currentCF:Lerp(targetCF, _G.Suavizacao)
+end
+
+-- Loop Principal
+RunService.RenderStepped:Connect(function()
+    if not aimbotAtivo or not LocalPlayer.Character then return end
+    
+    Cooldown = math.max(Cooldown - RunService.RenderStepped:Wait(), 0)
+    if Cooldown > 0 then return end
+    
+    local alvo = EncontrarAlvo()
+    
+    if alvo then
+        if math.random(1, 100) <= 85 then  -- 15% de falha simulada
+            MirarSuave(alvo)
+            Cooldown = math.random(8, 15)/10  -- 0.8-1.5s entre locks
+        end
+    else
+        -- Movimento natural
+        if math.random(1, 3) == 1 then
+            Camera.CFrame = Camera.CFrame:Lerp(
+                Camera.CFrame * CFrame.Angles(
+                    math.rad(math.random(-1, 1)),
+                    math.rad(math.random(-1, 1)),
+                    0
+                ), 0.05
+            )
+        end
+    end
+end)
+
+-- Ativação por Toque Longo (Extra)
+local touchStart = 0
+btnToggle.TouchLongPress:Connect(function()
+    if os.clock() - touchStart > 1 then  -- 1 segundo
+        Circulo.Radius = math.clamp(Circulo.Radius + 10, 30, 150)
+        touchStart = os.clock()
+    end
+end)
