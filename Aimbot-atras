@@ -1,0 +1,101 @@
+local _G = getgenv()
+_G.RaioCirculo = 45 -- 🔴 Raio reduzido aqui (original: 150)
+_G.DistanciaMaxima = 400
+
+-- Serviços
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Configurações
+local aimbotAtivo = true
+
+-- Criação do círculo PEQUENO
+local Circulo = Drawing.new("Circle")
+Circulo.Visible = true
+Circulo.Color = Color3.new(0.5, 0, 0.5)
+Circulo.Thickness = 1
+Circulo.Radius = _G.RaioCirculo -- 🔴 Usando o novo raio
+Circulo.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+-- Interface (botão no canto superior esquerdo)
+local screenGui = Instance.new("ScreenGui")
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 120, 0, 40)
+toggleButton.Position = UDim2.new(0, 0, 0, 0)
+toggleButton.Text = "AIMBOT: ON"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 90, 0)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 14
+toggleButton.BorderSizePixel = 0
+toggleButton.Parent = screenGui
+
+-- Toggle do aimbot
+local function alternarAimbot()
+    aimbotAtivo = not aimbotAtivo
+    Circulo.Visible = aimbotAtivo
+    _G.DistanciaMaxima = aimbotAtivo and 100 or 0
+    toggleButton.Text = aimbotAtivo and "AIMBOT: ON" or "AIMBOT: OFF"
+    toggleButton.BackgroundColor3 = aimbotAtivo and Color3.fromRGB(0, 90, 0) or Color3.fromRGB(90, 0, 0)
+end
+
+toggleButton.MouseButton1Click:Connect(alternarAimbot)
+
+-- Lógica de verificação
+local function alvoValido(jogador)
+    if not jogador.Character then return false end
+    
+    local cabeca = jogador.Character:FindFirstChild("Head")
+    local rootPart = jogador.Character:FindFirstChild("HumanoidRootPart")
+    local humanoide = jogador.Character:FindFirstChild("Humanoid")
+    
+    if not cabeca or not rootPart or not humanoide or humanoide.Health <= 0 then
+        return false
+    end
+    
+    local posicaoTela = Camera:WorldToViewportPoint(cabeca.Position)
+    if posicaoTela.Z <= 0 then return false end
+    
+    local posicao2D = Vector2.new(posicaoTela.X, posicaoTela.Y)
+    return (posicao2D - Circulo.Position).Magnitude <= Circulo.Radius -- 🔴 Usando raio pequeno
+end
+
+-- Loop principal
+RunService.RenderStepped:Connect(function()
+    if not aimbotAtivo or not LocalPlayer.Character then return end
+    
+    local melhorAlvo = nil
+    local menorDistancia = _G.DistanciaMaxima
+    
+    for _, jogador in ipairs(Players:GetPlayers()) do
+        if jogador == LocalPlayer then continue end
+        
+        if alvoValido(jogador) then
+            local distancia = (LocalPlayer.Character.HumanoidRootPart.Position - 
+                              jogador.Character.HumanoidRootPart.Position).Magnitude
+                              
+            if distancia < menorDistancia then
+                melhorAlvo = jogador.Character.Head
+                menorDistancia = distancia
+            end
+        end
+    end
+    
+    if melhorAlvo then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, melhorAlvo.Position)
+    end
+end)
+
+-- Tecla P extra
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        alternarAimbot()
+    end
+end)
