@@ -1,0 +1,159 @@
+-- Configurações globais
+local _G = getgenv()
+_G.RaioCirculo = 70
+_G.DistanciaMaxima = 200
+_G.CorHighlight = Color3.new(0.6, 0, 1)  -- Roxo
+
+-- Serviços
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Configurações iniciais
+local aimbotAtivo = true
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+--[[
+    ========== PARTE DO WALLHACK ==========
+]]--
+
+local function applyHighlight(character)
+    if character and not character:FindFirstChild("WallhackHighlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "WallhackHighlight"
+        highlight.Adornee = character
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.FillColor = _G.CorHighlight
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.new(1, 1, 1)
+        highlight.Parent = character
+    end
+end
+
+local function updateWallhack()
+    while true do
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                if player.Character then
+                    applyHighlight(player.Character)
+                else
+                    player.CharacterAdded:Once(applyHighlight)
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end
+
+--[[
+    ========== PARTE DO AIMBOT ==========
+]]--
+
+-- Criação do círculo
+local Circulo = Drawing.new("Circle")
+Circulo.Visible = aimbotAtivo
+Circulo.Color = _G.CorHighlight
+Circulo.Thickness = 1
+Circulo.Radius = _G.RaioCirculo
+
+-- Atualização contínua do círculo (FIX ADICIONADO)
+local function atualizarCirculo()
+    while task.wait() do
+        Circulo.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        Circulo.Radius = _G.RaioCirculo
+        Circulo.Visible = aimbotAtivo
+    end
+end
+task.spawn(atualizarCirculo)
+
+-- Botão de toggle
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 120, 0, 40)
+toggleButton.Position = UDim2.new(0, 0, 0, 0)
+toggleButton.Text = "AIMBOT: ON"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 90, 0)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 14
+toggleButton.BorderSizePixel = 0
+toggleButton.Parent = screenGui
+
+local function alternarAimbot()
+    aimbotAtivo = not aimbotAtivo
+    toggleButton.Text = aimbotAtivo and "AIMBOT: ON" or "AIMBOT: OFF"
+    toggleButton.BackgroundColor3 = aimbotAtivo and Color3.fromRGB(0, 90, 0) or Color3.fromRGB(90, 0, 0)
+end
+
+toggleButton.MouseButton1Click:Connect(alternarAimbot)
+
+--[[
+    ========== LÓGICA DO AIMBOT ==========
+]]--
+
+local function verificarParede(alvo)
+    local origem = Camera.CFrame.Position
+    local destino = alvo.Character.Head.Position
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local resultado = workspace:Raycast(origem, (destino - origem), params)
+    return not resultado or resultado.Instance:IsDescendantOf(alvo.Character)
+end
+
+local function alvoValido(jogador)
+    if jogador == LocalPlayer then return false end
+    local character = jogador.Character
+    if not character then return false end
+    
+    local cabeca = character:FindFirstChild("Head")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoide = character:FindFirstChild("Humanoid")
+    
+    if not cabeca or not rootPart or not humanoide or humanoide.Health <= 0 then
+        return false
+    end
+    
+    local posicaoTela = Camera:WorldToViewportPoint(cabeca.Position)
+    if posicaoTela.Z <= 0 then return false end
+    
+    local posicao2D = Vector2.new(posicaoTela.X, posicaoTela.Y)
+    return (posicao2D - Circulo.Position).Magnitude <= Circulo.Radius and verificarParede(jogador)
+end
+
+--[[
+    ========== LOOP PRINCIPAL ==========
+]]--
+
+RunService.RenderStepped:Connect(function()
+    if not aimbotAtivo or not LocalPlayer.Character then return end
+    
+    local melhorAlvo, menorDistancia = nil, _G.DistanciaMaxima
+    
+    for _, jogador in ipairs(Players:GetPlayers()) do
+        if alvoValido(jogador) then
+            local distancia = (LocalPlayer.Character.HumanoidRootPart.Position - 
+                              jogador.Character.HumanoidRootPart.Position).Magnitude
+            if distancia < menorDistancia then
+                melhorAlvo = jogador.Character.Head
+                menorDistancia = distancia
+            end
+        end
+    end
+    
+    if melhorAlvo then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, melhorAlvo.Position)
+    end
+end)
+
+-- Tecla P para toggle
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        alternarAimbot()
+    end
+end)
+
+-- Inicia sistemas
+updateWallhack()
