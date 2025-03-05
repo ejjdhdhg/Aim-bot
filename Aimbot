@@ -1,6 +1,6 @@
 local _G = getgenv()
 _G.RaioCirculo = 45
-_G.DistanciaMaxima = 100
+_G.DistanciaMaxima = 400
 
 -- Serviços
 local Players = game:GetService("Players")
